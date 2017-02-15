@@ -1,13 +1,16 @@
 #include <Adafruit_TSL2561_U.h>
-#include <Adafruit_NeoPixel.h>
 #include <Adafruit_Sensor.h>
+#include <Adafruit_NeoPixel.h>
 #include <CapPin.h>
 
+/*This code uses the Adafruit NeoPixel library, 
+the unified sensor driver for Adafruit's TSL2561 based on Adafruit's unified sensor library and
+the Arduino CapPin library */
 
-#define PIN 9
+
+#define stripPin 6
+#define speakerPin 9
 #define crossLed 1
-#define toneC 1911
-boolean dark = false;
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = pin number (most are valid)
@@ -16,7 +19,7 @@ boolean dark = false;
 //   NEO_GRB     Pixels are wired for GRB bitstream
 //   NEO_KHZ400  400 KHz bitstream (e.g. FLORA pixels)
 //   NEO_KHZ800  800 KHz bitstream (e.g. High Density LED strip)
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(20, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(20, stripPin, NEO_GRB + NEO_KHZ800);
 
 Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
@@ -25,16 +28,13 @@ CapPin cPin0  = CapPin(0);
 
 int thresholdCapPin = 500;
 int thresholdLightSensor = 35;
-int thresholdTime = 5000;
 
 void setup() {
-
-   Serial.begin(115200);
    pinMode(crossLed, OUTPUT);
+   
    strip.begin();
    strip.show();
-
-   /* Setup the sensor gain and integration time */
+   
    configureSensor();
 }
 
@@ -43,43 +43,43 @@ void loop() {
   int sensorValueLeft = cPin0.readPin(2000);
   int sensorValueRight = cPin10.readPin(2000);
   
-  
-  /* Get a new sensor event */ 
   sensors_event_t event;
   tsl.getEvent(&event);
 
-
-  
-  //bright outside
+  //if it is bright outside the backlight is off
    if(event.light > thresholdLightSensor){
     ledOff();
+     //capacitive sensor on the leftside is touched
     if ( sensorValueLeft > thresholdCapPin){   
-      blinkLeft();
+      turnSignalLeft();
     } 
+     //capacitive sensor on the rightside is touched
     if ( sensorValueRight > thresholdCapPin) {
-      blinkRight();
+      turnSignalRight();
     }
   }
-  //dark outside
+  //if it is dark outside the backlight in on
    if(event.light < thresholdLightSensor ){
     backLight();
+    //capacitive sensor on the leftside is touched
     if ( sensorValueLeft > thresholdCapPin){   
       ledOff();
       digitalWrite(crossLed,HIGH);
-      blinkLeft();
+      turnSignalLeft();
     } 
+    //capacitive sensor on the rightside is touched
     if ( sensorValueRight > thresholdCapPin) {
       ledOff();
       digitalWrite(crossLed,HIGH);
-      blinkRight();
+      turnSignalRight();
     }
   }
-
 }
 
-void blinkRight() {
+/* this function activates all NeoPixel-LEDs that are needed for the right turn signal*/
+void turnSignalRight() {
    for(int j=0; j<3; j++){
-      strip.setBrightness(255);
+    strip.setBrightness(255);
     for(int i=0; i<255;i++){
       strip.setPixelColor(0, i,i,0); 
       strip.setPixelColor(6, i,i,0);
@@ -87,7 +87,8 @@ void blinkRight() {
       strip.setPixelColor(9, i,i,0);
       strip.show();
     }  
-    tone(9, 350,50); 
+    //speaker sound when the capacitive sensor is touched
+    tone(speakerPin,350,80); 
     for(int i=0; i<255;i++){
       strip.setPixelColor(1, i,i,0); 
       strip.setPixelColor(5, i,i,0);
@@ -110,7 +111,8 @@ void blinkRight() {
     delay(300);
    }
 }
-void blinkLeft(){
+/* this function activates all NeoPixel-LEDs that are needed for the left turn signal*/
+void turnSignalLeft(){
   for(int j=0; j<3; j++){
    strip.setBrightness(255);
    for(int i=0; i<255;i++){
@@ -120,7 +122,8 @@ void blinkLeft(){
       strip.setPixelColor(10, i,i,0);
       strip.show();
    }
-   tone(9, 350,50); 
+   //speaker sounds when the capacitive sensor is touched
+   tone(speakerPin,350,80); 
     for(int i=0; i<255;i++){
       strip.setPixelColor(18, i,i,0); 
       strip.setPixelColor(15, i,i,0);
@@ -143,16 +146,17 @@ void blinkLeft(){
     delay(300);
   }
 }
+/* this function turns the backlight on*/
 void backLight(){
    digitalWrite(crossLed,HIGH);
    strip.setBrightness(100);
-  //right
+  //right signal
    strip.setPixelColor(6, 255,0,0); 
    strip.setPixelColor(2, 255,0,0);
    strip.setPixelColor(5, 255,0,0);
    strip.setPixelColor(7, 255,0,0);
    strip.setPixelColor(4, 255,0,0);
-  //left
+  //left signal
    strip.setPixelColor(14, 255,0,0); 
    strip.setPixelColor(17, 255,0,0);
    strip.setPixelColor(15, 255,0,0);
@@ -160,7 +164,7 @@ void backLight(){
    strip.setPixelColor(16, 255,0,0);
    strip.show();
 }
-
+/* this function turns all LEDs off*/
 void ledOff(){
   for(int i=0;i<strip.numPixels();i++){
     strip.setPixelColor(i,0,0,0);
@@ -168,9 +172,10 @@ void ledOff(){
   digitalWrite(crossLed,LOW);
   strip.show();
 }
+/* the following function configures the TSL2561 light sensor*/
 void configureSensor(void)
 {
-  tsl.enableAutoRange(true);            /* Auto-gain ... switches automatically between 1x and 16x */
+  tsl.enableAutoRange(true);/* Auto-gain ... switches automatically between 1x and 16x */
   
   /* Changing the integration time gives you better sensor resolution (402ms = 16-bit data) */
   tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);      /* fast but low resolution */
